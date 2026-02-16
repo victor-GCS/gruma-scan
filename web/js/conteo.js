@@ -32,7 +32,6 @@
         }
     }
 
-    // ✅ Mostrar/ocultar bloque #ocultarInput según si ya hay conteo (items/unidades/último ean)
     function toggleResumenVisible(forceShow = false) {
         const box = document.getElementById('ocultarInput');
         if (!box) return;
@@ -50,7 +49,6 @@
         const nTi = parseInt(String(ti).replace(/[^\d-]/g, ''), 10) || 0;
         const hasUE = String(ue).trim() !== '';
 
-        // Si ya hay algo registrado, se muestra
         if (nTu > 0 || nTi > 0 || hasUE) box.classList.remove('d-none');
         else box.classList.add('d-none');
     }
@@ -64,7 +62,6 @@
         if (ti && data.totalItems != null) ti.value = data.totalItems;
         if (ue && data.ultimo_ean != null) ue.value = data.ultimo_ean;
 
-        // ✅ luego decide si se muestra el resumen
         toggleResumenVisible();
     }
 
@@ -73,7 +70,6 @@
     const inputCant = document.getElementById('cantidad_entrada');
     const btnCambiar = document.getElementById('btn-cambiar-cantidad');
 
-    // Flag UI: cantidad habilitada solo 1 vez
     let cantidadHabilitadaUnaVez = false;
 
     function bloquearCantidad() {
@@ -225,9 +221,6 @@
 
     // ================= Estado inicial =================
     bloquearCantidad();
-
-    // ✅ Si ya había registros (totales/ultimo ean), se muestra el resumen.
-    // Si no hay nada, queda oculto.
     toggleResumenVisible();
 
     // ================= Modal Eliminar SKU =================
@@ -261,7 +254,6 @@
             }
         }
 
-        // Delegación (clave para PJAX)
         if (!window.$) {
             console.warn('jQuery no disponible: para PJAX se recomienda jQuery');
             return;
@@ -355,7 +347,6 @@
     })();
 
     // ================= Finalizar conteo =================
-    // (Solo funciona si existe #btn-finalizar-conteo y su modal)
     const btnFinalizar = document.getElementById('btn-finalizar-conteo');
     if (btnFinalizar) {
         const modalEl = document.getElementById('modalFinalizarConteo');
@@ -363,6 +354,8 @@
 
         const btnConfirmar = document.getElementById('btn-confirmar-finalizar');
         const err = document.getElementById('finalizar_conteo_error');
+
+        let finalizando = false; // ✅ anti doble click
 
         function clearErr() {
             if (!err) return;
@@ -382,10 +375,16 @@
         btnFinalizar.addEventListener('click', () => {
             if (!modal) return alert('Bootstrap modal no disponible');
             clearErr();
+            finalizando = false;
+            if (btnConfirmar) btnConfirmar.disabled = false;
             modal.show();
         });
 
         btnConfirmar?.addEventListener('click', () => {
+            if (finalizando) return; // ✅ evita doble POST
+            finalizando = true;
+            btnConfirmar.disabled = true;
+
             clearErr();
             const url = btnFinalizar.dataset.url;
 
@@ -398,9 +397,10 @@
                     body: buildBody({}),
                 })
                 .then(async (r) => {
-                    // ✅ Importante: leer JSON incluso si viene 400/403/500 (sin redirect)
                     const data = await r.json().catch(() => null);
                     if (!r.ok) {
+                        finalizando = false;
+                        btnConfirmar.disabled = false;
                         showErr((data && data.message) ? data.message : `Error HTTP ${r.status}`);
                         return null;
                     }
@@ -408,25 +408,27 @@
                 })
                 .then((data) => {
                     if (!data) return;
+
                     if (!data.success) {
+                        finalizando = false;
+                        btnConfirmar.disabled = false;
                         showErr(data.message || 'No se pudo finalizar');
                         return;
                     }
 
                     modal?.hide();
 
-                    // Bloquear input y botón
-                    if (inputEan) inputEan.disabled = true;
-                    btnFinalizar.disabled = true;
-
-                    recargarTabla();
-
-                    // Si quieres salir al index al finalizar OK:
-                    // window.location.href = btnFinalizar.dataset.redirect || '/grumascanmarcacion/grumascanconteo/index';
-
-                    alert('Conteo finalizado.');
+                    // ✅ Redirección sin volver atrás
+                    const redirectUrl = btnFinalizar.dataset.redirect;
+                    window.location.replace(
+                        redirectUrl || '/grumalog-scan/web/index.php?r=grumascanmarcacion%2Fgrumascanconteo%2Fcreate'
+                    );
                 })
-                .catch(() => showErr('Error de comunicación'));
+                .catch(() => {
+                    finalizando = false;
+                    btnConfirmar.disabled = false;
+                    showErr('Error de comunicación');
+                });
         });
     }
 })();

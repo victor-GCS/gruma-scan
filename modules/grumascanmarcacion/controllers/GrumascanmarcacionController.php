@@ -14,6 +14,10 @@ use app\models\forms\GrumascanMarcacionPrintForm;
 use common\components\MarcacionStickerPrinter;
 use app\models\forms\GrumascanMarcacionUseForm;
 use yii\filters\AccessControl;
+use yii\web\BadRequestHttpException;
+use yii\web\Response;
+use yii\widgets\ActiveForm;
+
 
 /**
  * GrumascanmarcacionController implements the CRUD actions for Grumascanmarcacion model.
@@ -32,6 +36,7 @@ class GrumascanmarcacionController extends Controller
                     'class' => VerbFilter::className(),
                     'actions' => [
                         'delete' => ['POST'],
+                        'validar-usar-sticker' => ['POST'],
                     ],
                 ],
                 'access' => [
@@ -303,16 +308,9 @@ class GrumascanmarcacionController extends Controller
 
         if ($form->load(Yii::$app->request->post()) && $form->validate()) {
 
-            $model = Grumascanmarcacion::findOne($form->codigo);
-
+            $model = $form->getMarcacionModel();
             if (!$model) {
                 Yii::$app->session->setFlash('error', 'Sticker no existe.');
-                return $this->refresh();
-            }
-
-            // Opcional: evitar reuso
-            if ($model->idbodega !== null) {
-                Yii::$app->session->setFlash('error', 'Sticker ya fue utilizado.');
                 return $this->refresh();
             }
 
@@ -332,5 +330,17 @@ class GrumascanmarcacionController extends Controller
         return $this->render('usar-sticker', [
             'model' => $form,
         ]);
+    }
+    public function actionValidarUsarSticker()
+    {
+        $model = new GrumascanMarcacionUseForm();
+        $model->scenario = 'ajax-codigo';
+
+        if (Yii::$app->request->isAjax && $model->load(Yii::$app->request->post())) {
+            Yii::$app->response->format = Response::FORMAT_JSON;
+            return \yii\widgets\ActiveForm::validate($model);
+        }
+
+        throw new BadRequestHttpException('Solicitud inválida.');
     }
 }

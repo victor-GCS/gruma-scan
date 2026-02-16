@@ -2,9 +2,11 @@
 
 $params = require __DIR__ . '/params.php';
 $db = require __DIR__ . '/db.php';
+$dbsiesa = require __DIR__ . '/db_siesa.php';
 
 $config = [
     'id' => 'basic',
+    'name' => 'Gruma Scan',
     'basePath' => dirname(__DIR__),
     'bootstrap' => ['log'],
     'aliases' => [
@@ -61,6 +63,8 @@ $config = [
             ],
         ],
         'db' => $db,
+        'dbsiesa' => $dbsiesa,
+
         /*
         'urlManager' => [
             'enablePrettyUrl' => true,

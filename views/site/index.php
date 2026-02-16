@@ -22,7 +22,26 @@ $this->title = 'GRUMALOG Scan';
     </div>
 
     <div class="row justify-content-center">
+        <div class="col-md-4 mb-3">
+            <div class="card shadow-sm h-100 text-center">
+                <div class="card-body">
+                    <h3 class="card-title">
+                        <?= Icon::show('fa-solid fa-barcode') ?>
+                        Marcar Stikers
+                    </h3>
 
+                    <p class="card-text text-muted">
+                        Agregar a un stiker bodega, seccion y ubicacion.
+                    </p>
+
+                    <?= Html::a(
+                        Icon::show('play') . ' Ver ',
+                        ['/grumascanmarcacion/grumascanmarcacion/usar-sticker'],
+                        ['class' => 'btn btn-success btn-lg w-100']
+                    ) ?>
+                </div>
+            </div>
+        </div>
         <div class="col-md-4 mb-3">
             <div class="card shadow-sm h-100 text-center">
                 <div class="card-body">
@@ -43,21 +62,22 @@ $this->title = 'GRUMALOG Scan';
                 </div>
             </div>
         </div>
+
         <div class="col-md-4 mb-3">
             <div class="card shadow-sm h-100 text-center">
                 <div class="card-body">
                     <h3 class="card-title">
-                        <?= Icon::show('fa-solid fa-barcode') ?>
-                        Marcar Stikers
+                        <?= Icon::show('fa-solid fa-bug') ?>
+                        Conteo manual
                     </h3>
 
                     <p class="card-text text-muted">
-                        Agregar a un stiker bodega, seccion y ubicacion.
+                        Auditar conteo por marcacion.
                     </p>
 
                     <?= Html::a(
                         Icon::show('play') . ' Ver ',
-                        ['/grumascanmarcacion/grumascanmarcacion/usar-sticker'],
+                        ['/grumascanmarcacion/grumascanconteomanual/create'],
                         ['class' => 'btn btn-success btn-lg w-100']
                     ) ?>
                 </div>

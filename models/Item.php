@@ -126,7 +126,6 @@ class Item extends \yii\db\ActiveRecord
     public function getUnidadempaque()
     {
         return $this->hasOne(Unidadempaque::class, ['codigo' => 'unidadEmpaque']);
-
     }
 
     public function getUnidadorden()
@@ -522,5 +521,199 @@ class Item extends \yii\db\ActiveRecord
 
         return $existencia;
     }
+    public static function obtenerDatosItemPorCodigoBarras($codigobarras)
+    {
+        $command = \Yii::$app->dbsiesa->createCommand("
+        SELECT 
+            bar.f131_id AS codigoBarras,
+            itx.f121_id_barras_principal AS codigoBarrasPrincipal,
+            it.f120_id_cia, it.f120_id AS item,
+            it.f120_referencia AS referencia,
+            it.f120_descripcion AS descripcion,
+            it.f120_descripcion_corta AS descripcionCorta,
+            it.f120_id_unidad_inventario,
+            it.f120_id_unidad_empaque AS unidadEmpaque,
+            it.f120_id_unidad_orden AS unidadOrden,
+            itx.f121_id_ext1_detalle AS idColor,
+            col.f117_descripcion AS color,
+            itx.f121_id_ext2_detalle AS idTalla,
+            tl.f119_descripcion AS talla,
+            TRIM(itcm.f106_id) AS idCategoria,
+            TRIM(itcm.f106_descripcion) AS categoria,
+            TRIM(itcm1.f106_id) AS idSubcategoria,
+            TRIM(itcm1.f106_descripcion) AS subcategoria,
+            TRIM(itcm2.f106_id) AS idProducto,
+            TRIM(itcm2.f106_descripcion) AS producto,
+            TRIM(itcm3.f106_id) AS idMarca,
+            TRIM(itcm3.f106_descripcion) AS marca,
+            TRIM(itcm4.f106_id) AS idProveedor,
+            TRIM(itcm4.f106_descripcion) AS proveedor,
+            itx.f121_ind_estado AS idEstadoItem,
+            CASE 
+                WHEN itx.f121_ind_estado = 1 THEN 'ACTIVO'
+                WHEN itx.f121_ind_estado = 0 THEN 'INACTIVO'
+                WHEN itx.f121_ind_estado = 2 THEN 'BLOQUEADO'
+                ELSE 'DESCONOCIDO'
+            END AS estadoItem
+        FROM t120_mc_items it                 
+        INNER JOIN t121_mc_items_extensiones itx 
+            ON itx.f121_rowid_item = it.f120_rowid
+        LEFT JOIN t131_mc_items_barras bar 
+            ON itx.f121_rowid = bar.f131_rowid_item_ext
+        LEFT JOIN t117_mc_extensiones1_detalle col 
+            ON it.f120_id_cia = col.f117_id_cia 
+            AND itx.f121_id_extension1 = col.f117_id_extension1 
+            AND itx.f121_id_ext1_detalle = col.f117_id
+        LEFT JOIN t119_mc_extensiones2_detalle tl 
+            ON it.f120_id_cia = tl.f119_id_cia 
+            AND itx.f121_id_extension2 = tl.f119_id_extension2 
+            AND itx.f121_id_ext2_detalle = tl.f119_id
+        LEFT JOIN t125_mc_items_criterios itc_categoria 
+            ON it.f120_rowid = itc_categoria.f125_rowid_item 
+            AND itc_categoria.f125_id_plan = '001'
+        LEFT JOIN t106_mc_criterios_item_mayores itcm 
+            ON itc_categoria.f125_id_plan = itcm.f106_id_plan 
+            AND itc_categoria.f125_id_criterio_mayor = itcm.f106_id
+        LEFT JOIN t125_mc_items_criterios itc_subcategoria 
+            ON it.f120_rowid = itc_subcategoria.f125_rowid_item 
+            AND itc_subcategoria.f125_id_plan = '002'
+        LEFT JOIN t106_mc_criterios_item_mayores itcm1 
+            ON itc_subcategoria.f125_id_plan = itcm1.f106_id_plan 
+            AND itc_subcategoria.f125_id_criterio_mayor = itcm1.f106_id
+        LEFT JOIN t125_mc_items_criterios itc_producto 
+            ON it.f120_rowid = itc_producto.f125_rowid_item 
+            AND itc_producto.f125_id_plan = '005'
+        LEFT JOIN t106_mc_criterios_item_mayores itcm2 
+            ON itc_producto.f125_id_plan = itcm2.f106_id_plan 
+            AND itc_producto.f125_id_criterio_mayor = itcm2.f106_id
+        LEFT JOIN t125_mc_items_criterios itc_marca 
+            ON it.f120_rowid = itc_marca.f125_rowid_item 
+            AND itc_marca.f125_id_plan = '014'
+        LEFT JOIN t106_mc_criterios_item_mayores itcm3 
+            ON itc_marca.f125_id_plan = itcm3.f106_id_plan 
+            AND itc_marca.f125_id_criterio_mayor = itcm3.f106_id
+        LEFT JOIN t125_mc_items_criterios itc_proveedor 
+            ON it.f120_rowid = itc_proveedor.f125_rowid_item 
+            AND itc_proveedor.f125_id_plan = '015'
+        LEFT JOIN t106_mc_criterios_item_mayores itcm4 
+            ON itc_proveedor.f125_id_plan = itcm4.f106_id_plan 
+            AND itc_proveedor.f125_id_criterio_mayor = itcm4.f106_id
+        WHERE bar.f131_id = :codigobarras
+    ");
 
+        $command->bindValue(':codigobarras', $codigobarras);
+        $result = $command->queryOne();
+
+        return $result;
+    }
+
+
+    public static function grabarItem($dato)
+    {
+        if (!empty($dato)) {
+            $item = $dato['item'];
+
+            // CATEGORÍA
+            $modelCategoria = new Categoria();
+            $modelCategoria->codigoERP = $dato['idCategoria'];
+            $modelCategoria->nombre = $dato['categoria'];
+            $idcategoria = Categoria::actualizarRegistro($modelCategoria);
+
+            // SUBCATEGORÍA
+            $modelSubcategoria = new Subcategoria();
+            $modelSubcategoria->codigoERP = $dato['idSubcategoria'];
+            $modelSubcategoria->nombre = $dato['subcategoria'];
+            $modelSubcategoria->idCategoria = $idcategoria;
+            $idsubcategoria = Subcategoria::actualizarRegistro($modelSubcategoria);
+
+            // TALLA
+            $codigo = $dato['idTalla'];
+            $nombre = $dato['talla'];
+            $idtalla = Talla::actualizarRegistrocn($codigo, $nombre);
+
+            // COLOR
+            $codigo = $dato['idColor'];
+            $nombre = $dato['color'];
+            $idcolor = Color::actualizarRegistrocn($codigo, $nombre);
+
+            // PRODUCTO
+            $modelProducto = new Producto();
+            $modelProducto->codigo = $dato['idProducto'];
+            $modelProducto->nombre = $dato['producto'];
+            $idproducto = Producto::actualizarRegistro($modelProducto);
+
+            // MARCA
+            $modelMarca = new Marca();
+            $modelMarca->codigo = $dato['idMarca'];
+            $modelMarca->nombre = $dato['marca'];
+            $idmarca = Marca::actualizarRegistro($modelMarca);
+
+            // DATOS DEL ITEM
+            $codigobarras = $dato['codigoBarras'];
+            $descripcion = $dato['descripcion'];
+            $referencia = $dato['referencia'];
+            $codigoproveedor = $dato['idProveedor'];
+            $nombreproveedor = $dato['proveedor'];
+
+            $estado = $dato['estadoItem'];
+
+
+            $unidadempaque = is_array($dato) ? ($dato['unidadEmpaque'] ?? null) : null;
+            $unidadorden = is_array($dato) ? ($dato['unidadOrden'] ?? null) : null;
+
+
+
+            // Buscar o crear modelo de Item
+            if ($codigobarras) {
+                $model = Item::findOne(['codigoBarras' => $codigobarras]);
+                if ($model == null) {
+                    $model = new Item();
+                    $model->codigoBarras = $codigobarras;
+                }
+                $model->item = $item;
+                $model->idTalla = $idtalla;
+                $model->idColor = $idcolor;
+            } else {
+                $model = Item::findOne([
+                    'item' => $item,
+                    'idTalla' => $idtalla,
+                    'idColor' => $idcolor
+                ]);
+
+                if ($model == null) {
+                    $model = new Item();
+                    $model->item = $item;
+                    $model->idTalla = $idtalla;
+                    $model->idColor = $idcolor;
+                }
+            }
+
+            $model->referencia = $referencia;
+            $model->descripcion = $descripcion;
+            $model->idCategoria = $idcategoria;
+            $model->idSubcategoria = $idsubcategoria;
+            $model->idProducto = $idproducto;
+            $model->idMarca = $idmarca;
+            $model->codigoProveedor = $codigoproveedor;
+            $model->nombreProveedor = $nombreproveedor;
+            $model->idEstado = $estado;
+            $model->unidadEmpaque = $unidadempaque;
+            $model->unidadOrden = $unidadorden;
+
+            if (!$model->save()) {
+                var_dump($model->getErrors());
+                die("Error ITEM: " . $model->item);
+            }
+
+            // Si el código de barras es el principal, hacer algo
+            if ($dato['codigoBarras'] == $dato['codigoBarrasPrincipal']) {
+                $idprincipal = $model->id;
+                // Puedes devolverlo o registrarlo si necesitas
+            }
+
+            return true;
+        }
+
+        return false;
+    }
 }

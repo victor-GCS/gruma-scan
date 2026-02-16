@@ -2,11 +2,17 @@
 
 namespace app\modules\grumascanmarcacion\controllers;
 
+use app\models\Categoria;
+use app\models\Color;
 use app\models\Grumascanconteo;
 use app\models\Grumascanconteodetalle;
+use app\models\Producto;
 use app\models\search\GrumascanconteodetalleSearch;
 use app\models\User;
 use app\models\Item;
+use app\models\Marca;
+use app\models\Subcategoria;
+use app\models\Talla;
 use yii\web\Response;
 use Yii;
 use yii\db\Expression;
@@ -269,14 +275,44 @@ class GrumascanconteodetalleController extends Controller
         // ✅ Buscar item por EAN en tu tabla item
         $item = Item::find()
             ->where(['codigoBarras' => $codigoEAN])
-            ->andWhere(['idEstado' => 'ACTIVO']) // si en tu tabla aplica ese campo
+            ->andWhere(['idEstado' => 'ACTIVO'])
             ->one();
 
-        if (!$item) {
-            return [
-                'success' => false,
-                'message' => "No existe artículo para EAN: {$codigoEAN}",
-            ];
+        if ($item === null) {
+
+            // Buscar en Siesa
+            $itemSiesa = Item::obtenerDatosItemPorCodigoBarras($codigoEAN);
+
+            if (!$itemSiesa) {
+                return [
+                    'success' => false,
+                    'message' => 'No Existe Artículo en GRUMALOG ni en SIESA',
+                ];
+            }
+
+            // Intentar grabar en BD
+            $ok = Item::grabarItem($itemSiesa);
+
+            if (!$ok) {
+                return [
+                    'success' => false,
+                    'message' => 'El item existe en SIESA pero no se pudo grabar en GRUMALOG',
+                ];
+            }
+
+            // Recargar desde BD (IMPORTANTE: reasignar a $item)
+            $item = Item::find()
+                ->where(['codigoBarras' => $codigoEAN])
+                ->andWhere(['idEstado' => 'ACTIVO'])
+                ->one();
+
+            if ($item === null) {
+                // Caso raro: grabó “ok” pero no apareció (estado distinto, otro EAN, etc.)
+                return [
+                    'success' => false,
+                    'message' => 'Se grabó el item desde SIESA, pero no fue posible recuperarlo como ACTIVO en GRUMALOG',
+                ];
+            }
         }
 
         // ✅ Un registro por item dentro del conteo (unique index)
@@ -338,6 +374,116 @@ class GrumascanconteodetalleController extends Controller
             'totalItems' => (int)$conteo->totalregistros,
             'ultimo_ean' => $codigoEAN,
         ];
+    }
+
+
+    public static function grabarItem($dato)
+    {
+        if (!empty($dato)) {
+            $item = $dato['item'];
+
+            // CATEGORÍA
+            $modelCategoria = new Categoria();
+            $modelCategoria->codigoERP = $dato['idCategoria'];
+            $modelCategoria->nombre = $dato['categoria'];
+            $idcategoria = Categoria::actualizarRegistro($modelCategoria);
+
+            // SUBCATEGORÍA
+            $modelSubcategoria = new Subcategoria();
+            $modelSubcategoria->codigoERP = $dato['idSubcategoria'];
+            $modelSubcategoria->nombre = $dato['subcategoria'];
+            $modelSubcategoria->idCategoria = $idcategoria;
+            $idsubcategoria = Subcategoria::actualizarRegistro($modelSubcategoria);
+
+            // TALLA
+            $codigo = $dato['idTalla'];
+            $nombre = $dato['talla'];
+            $idtalla = Talla::actualizarRegistrocn($codigo, $nombre);
+
+            // COLOR
+            $codigo = $dato['idColor'];
+            $nombre = $dato['color'];
+            $idcolor = Color::actualizarRegistrocn($codigo, $nombre);
+
+            // PRODUCTO
+            $modelProducto = new Producto();
+            $modelProducto->codigo = $dato['idProducto'];
+            $modelProducto->nombre = $dato['producto'];
+            $idproducto = Producto::actualizarRegistro($modelProducto);
+
+            // MARCA
+            $modelMarca = new Marca();
+            $modelMarca->codigo = $dato['idMarca'];
+            $modelMarca->nombre = $dato['marca'];
+            $idmarca = Marca::actualizarRegistro($modelMarca);
+
+            // DATOS DEL ITEM
+            $codigobarras = $dato['codigoBarras'];
+            $descripcion = $dato['descripcion'];
+            $referencia = $dato['referencia'];
+            $codigoproveedor = $dato['idProveedor'];
+            $nombreproveedor = $dato['proveedor'];
+
+            $estado = $dato['estadoItem'];
+
+
+            $unidadempaque = is_array($dato) ? ($dato['unidadEmpaque'] ?? null) : null;
+            $unidadorden = is_array($dato) ? ($dato['unidadOrden'] ?? null) : null;
+
+
+
+            // Buscar o crear modelo de Item
+            if ($codigobarras) {
+                $model = Item::findOne(['codigoBarras' => $codigobarras]);
+                if ($model == null) {
+                    $model = new Item();
+                    $model->codigoBarras = $codigobarras;
+                }
+                $model->item = $item;
+                $model->idTalla = $idtalla;
+                $model->idColor = $idcolor;
+            } else {
+                $model = Item::findOne([
+                    'item' => $item,
+                    'idTalla' => $idtalla,
+                    'idColor' => $idcolor
+                ]);
+
+                if ($model == null) {
+                    $model = new Item();
+                    $model->item = $item;
+                    $model->idTalla = $idtalla;
+                    $model->idColor = $idcolor;
+                }
+            }
+
+            $model->referencia = $referencia;
+            $model->descripcion = $descripcion;
+            $model->idCategoria = $idcategoria;
+            $model->idSubcategoria = $idsubcategoria;
+            $model->idProducto = $idproducto;
+            $model->idMarca = $idmarca;
+            $model->codigoProveedor = $codigoproveedor;
+            $model->nombreProveedor = $nombreproveedor;
+            $model->idEstado = $estado;
+            $model->unidadEmpaque = $unidadempaque;
+            $model->unidadOrden = $unidadorden;
+
+            if (!$model->save()) {
+                var_dump($model->getErrors());
+                die("Error ITEM: " . $model->item);
+            }
+
+            // Si el código de barras es el principal, hacer algo
+            if ($dato['codigoBarras'] == $dato['codigoBarrasPrincipal']) {
+                $idprincipal = $model->id;
+                // Puedes devolverlo o registrarlo si necesitas
+            }
+
+            return true;
+        }
+
+        return false;
     }
     /**
      * Valida clave de admin para habilitar cambio de cantidad (solo UI).
@@ -515,14 +661,21 @@ class GrumascanconteodetalleController extends Controller
             return ['success' => false, 'message' => 'El conteo no existe.'];
         }
 
-        if ((int)$conteo->idestado !== 0) {
-            Yii::$app->response->statusCode = 400;
-            return ['success' => false, 'message' => 'El conteo no está activo.'];
-        }
-
+        // ✅ Autorización primero (mejor seguridad)
         if ((int)$conteo->created_by !== (int)Yii::$app->user->id) {
             Yii::$app->response->statusCode = 403;
             return ['success' => false, 'message' => 'No autorizado para este conteo.'];
+        }
+
+        // ✅ Idempotente: si ya está terminado, no es error
+        if ((int)$conteo->idestado === 1) {
+            return ['success' => true, 'message' => 'OK (ya estaba finalizado)'];
+        }
+
+        // Solo permitimos finalizar si está activo
+        if ((int)$conteo->idestado !== 0) {
+            Yii::$app->response->statusCode = 400;
+            return ['success' => false, 'message' => 'El conteo no está activo.'];
         }
 
         $tieneDetalles = $conteo->getGrumascanconteodetalles()->exists();
@@ -535,11 +688,69 @@ class GrumascanconteodetalleController extends Controller
         }
 
         $conteo->idestado = 1; // terminado
+
         if (!$conteo->save()) {
             Yii::$app->response->statusCode = 500;
-            return ['success' => false, 'message' => 'No se pudo finalizar el conteo.'];
+            $errors = $conteo->getFirstErrors();
+            $msg = $errors ? reset($errors) : 'No se pudo finalizar el conteo.';
+            return ['success' => false, 'message' => $msg];
         }
 
         return ['success' => true, 'message' => 'OK'];
+    }
+
+
+    public function actionBorrarTodo($idgrumascanconteo)
+    {
+        if (Yii::$app->user->isGuest) {
+            return $this->redirect(['site/login']);
+        }
+        if ($resp = User::validar()) {
+            return $resp;
+        }
+
+        $idConteo = (int)$idgrumascanconteo;
+
+        $conteo = Grumascanconteo::findOne($idConteo);
+        if (!$conteo) {
+            Yii::$app->session->setFlash('error', 'El conteo no existe.');
+            return $this->redirect(['do-conteo-ajax', 'idgrumascanconteo' => $idConteo]);
+        }
+
+        if ((int)$conteo->idestado !== 0) {
+            Yii::$app->session->setFlash('warning', 'El conteo no está activo.');
+            return $this->redirect(['do-conteo-ajax', 'idgrumascanconteo' => $idConteo]);
+        }
+
+        if ((int)$conteo->created_by !== (int)Yii::$app->user->id) {
+            Yii::$app->session->setFlash('error', 'No autorizado para este conteo.');
+            return $this->redirect(['do-conteo-ajax', 'idgrumascanconteo' => $idConteo]);
+        }
+
+        $db = Yii::$app->db;
+        $tx = $db->beginTransaction();
+        try {
+            Grumascanconteodetalle::deleteAll(['idgrumascanconteo' => $idConteo]);
+
+            $conteo->ultimoean = null;
+            $conteo->totalunidades = 0;
+            $conteo->totalregistros = 0;
+
+            if (!$conteo->save()) {
+                $tx->rollBack();
+                Yii::$app->session->setFlash('error', 'No se pudo actualizar la cabecera del conteo.');
+                return $this->redirect(['do-conteo-ajax', 'idgrumascanconteo' => $idConteo]);
+            }
+
+            $tx->commit();
+
+            Yii::$app->session->setFlash('success', 'Conteo borrado correctamente.');
+            return $this->redirect(['do-conteo-ajax', 'idgrumascanconteo' => $idConteo]);
+        } catch (\Throwable $e) {
+            $tx->rollBack();
+            Yii::error($e->getMessage(), __METHOD__);
+            Yii::$app->session->setFlash('error', 'Error al borrar todo el conteo.');
+            return $this->redirect(['do-conteo-ajax', 'idgrumascanconteo' => $idConteo]);
+        }
     }
 }

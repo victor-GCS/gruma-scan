@@ -36,6 +36,8 @@ $this->title = 'Conteo #' . $modelConteo->id;
                 'class' => 'btn btn-danger',
                 'id' => 'btn-finalizar-conteo',
                 'data-url' => Url::to(['finalizar-conteo', 'idgrumascanconteo' => $modelConteo->id]),
+                'data-redirect' => Url::to(['//grumascanmarcacion/grumascanconteo/create']),
+
             ]) ?>
         </div>
 
@@ -47,7 +49,7 @@ $this->title = 'Conteo #' . $modelConteo->id;
                 'data-validar-url' => Url::to(['validar-clave-admin']),
             ]) ?>
         </div>
-        
+
     </div>
 
 
@@ -60,23 +62,31 @@ $this->title = 'Conteo #' . $modelConteo->id;
 
     <div class="row">
         <div class="col-4">
-            <?= $form->field($model, 'idgrumascanconteo')->textInput([
-                'disabled' => true,
-                'label' => 'Bodega',
-                'value' => $modelConteo->marcacion->bodega->codigo ?? 'no tiene asignado'
-            ]) ?>
+            <?= $form->field($model, 'idgrumascanconteo')
+                ->label('Id Bodega')
+                ->textInput([
+                    'disabled' => true,
+                    'value' => $modelConteo->marcacion->bodega->codigo ?? 'no tiene asignado',
+                ]) ?>
+
         </div>
         <div class="col-4">
-            <?= $form->field($model, 'idgrumascanconteo')->textInput([
-                'disabled' => true,
-                'value' => $modelConteo->marcacion->ubicacion ?? 'no tiene asignado',
-            ]) ?>
+
+            <?= $form->field($model, 'idgrumascanconteo')
+                ->label('Ubicacion')
+                ->textInput([
+                    'disabled' => true,
+                    'value' => $modelConteo->marcacion->ubicacion ?? 'no tiene asignado',
+                ]) ?>
+
         </div>
         <div class="col-4">
-            <?= $form->field($model, 'idgrumascanconteo')->textInput([
-                'disabled' => true,
-                'value' => $modelConteo->marcacion->seccion ?? 'no tiene asignado',
-            ]) ?>
+            <?= $form->field($model, 'idgrumascanconteo')
+                ->label('Seccion')
+                ->textInput([
+                    'disabled' => true,
+                    'value' => $modelConteo->marcacion->seccion ?? 'no tiene asignado',
+                ]) ?>
         </div>
 
         <div class="col-12">
@@ -85,7 +95,7 @@ $this->title = 'Conteo #' . $modelConteo->id;
                 'id' => 'codigo_barras',
                 'class' => 'form-control',
                 'autofocus' => true,
-                'maxlength' => 13,
+                'maxlength' => 14,
                 'minlength' => 13,
                 'data-procesar-url' => Url::to(['procesar-formulario', 'idgrumascanconteo' => $modelConteo->id]),
             ]) ?>
@@ -132,42 +142,31 @@ $this->title = 'Conteo #' . $modelConteo->id;
         'showPageSummary' => true,
         'summary' => 'Mostrando {begin} - {end} de {totalCount} resultados',
         'tableOptions' => ['class' => 'table table-bordered table-striped'],
+
+        // ✅ Toolbar superior
+        'toolbar' => [
+            [
+                'content' =>
+                Html::a('🗑 Borrar todo', ['borrar-todo', 'idgrumascanconteo' => $modelConteo->id], [
+                    'class' => 'btn btn-danger',
+                    'title' => 'Borrar todos los registros del conteo',
+                    'data' => [
+                        'confirm' => '¿Seguro que deseas borrar TODOS los registros de este conteo? Esta acción no se puede deshacer.',
+                        'method' => 'post',     // ✅ Yii lo manda como POST nativo
+                        'pjax' => '0',          // evita que intente pjax en este click
+                    ],
+                ]),
+            ],
+        ],
+
+        'panel' => [
+            'type' => GridView::TYPE_DEFAULT,
+            'heading' => false,
+        ],
+
+
         'columns' => [
             ['class' => 'yii\grid\SerialColumn'],
-
-            [
-                'attribute' => 'item',
-                'label' => 'Item',
-                'value' => fn($m) => $m['item'] ?? '-',
-            ],
-            [
-                'label' => 'EAN',
-                'value' => fn($m) => $m['eans'] ?? '-',
-            ],
-            [
-                'attribute' => 'color_nombre',
-                'label' => 'Color',
-                'value' => fn($m) => $m['color_nombre'] ?? 'NA',
-            ],
-            [
-                'attribute' => 'talla_nombre',
-                'label' => 'Talla',
-                'value' => fn($m) => $m['talla_nombre'] ?? 'NA',
-            ],
-            [
-                'attribute' => 'cantidad',
-                'label' => 'Cantidad',
-                'format' => ['decimal', 0],
-                'pageSummary' => true,
-                'value' => fn($m) => (int)($m['cantidad'] ?? 0),
-            ],
-            [
-                'attribute' => 'total_unidades',
-                'label' => 'Total Unidades',
-                'format' => ['decimal', 0],
-                'pageSummary' => true,
-                'value' => fn($m) => (int)($m['total_unidades'] ?? 0),
-            ],
 
             // ✅ Papelera por fila (estilo ejemplo: link con ícono, sin borde)
             [
@@ -204,6 +203,42 @@ $this->title = 'Conteo #' . $modelConteo->id;
                     );
                 }
             ],
+
+            [
+                'attribute' => 'item',
+                'label' => 'Item',
+                'value' => fn($m) => $m['item'] ?? '-',
+            ],
+            [
+                'label' => 'EAN',
+                'value' => fn($m) => $m['eans'] ?? '-',
+            ],
+            [
+                'attribute' => 'color_nombre',
+                'label' => 'Color',
+                'value' => fn($m) => $m['color_nombre'] ?? 'NA',
+            ],
+            [
+                'attribute' => 'talla_nombre',
+                'label' => 'Talla',
+                'value' => fn($m) => $m['talla_nombre'] ?? 'NA',
+            ],
+            [
+                'attribute' => 'cantidad',
+                'label' => 'Cantidad',
+                'format' => ['decimal', 0],
+                'pageSummary' => true,
+                'value' => fn($m) => (int)($m['cantidad'] ?? 0),
+            ],
+            [
+                'attribute' => 'total_unidades',
+                'label' => 'Total Unidades',
+                'format' => ['decimal', 0],
+                'pageSummary' => true,
+                'value' => fn($m) => (int)($m['total_unidades'] ?? 0),
+            ],
+
+
         ],
     ]); ?>
 

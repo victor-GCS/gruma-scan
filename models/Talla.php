@@ -143,5 +143,17 @@ class Talla extends \yii\db\ActiveRecord
         return (int) Talla::find()->max('orden') + 1;
     }
 
+    public static function actualizarRegistrocn($codigo, $nombre)
+    {
 
+        $model = Talla::findOne(['codigo' => $codigo]);
+        if ($model == null) {
+            $model = new Talla();
+            $model->codigo = $codigo;
+            $model->nombre = $nombre;
+        }
+
+        $model->save();
+        return $model->id;
+    }
 }

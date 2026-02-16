@@ -137,5 +137,17 @@ class Color extends \yii\db\ActiveRecord
     {
         return $this->hasOne(User::className(), ['id' => 'updated_by']);
     }
+    public static function actualizarRegistrocn($codigo, $nombre)
+    {
 
+        $model = Color::findOne(['codigo' => $codigo]);
+        if ($model == null) {
+            $model = new Color();
+            $model->codigo = $codigo;
+            $model->nombre = $nombre;
+        }
+        $model->save();
+
+        return $model->id;
+    }
 }
