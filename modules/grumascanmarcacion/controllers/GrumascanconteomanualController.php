@@ -84,7 +84,7 @@ class GrumascanconteomanualController extends Controller
             }
 
             // Normaliza/valida mínimos
-            $idMarcacion = $model->idmarcacion; // bigint (puede venir string)
+            $idMarcacion    = $model->idmarcacion; // bigint (puede venir string)
             $unidadesManual = (int)$model->unidades_manual;
 
             if ($idMarcacion === null || $idMarcacion === '' || $unidadesManual < 0) {
@@ -111,7 +111,7 @@ class GrumascanconteomanualController extends Controller
             $exists = Grumascanconteomanual::find()
                 ->where([
                     'idgrumascanconteo' => (int)$conteoReal->id,
-                    'idmarcacion' => $idMarcacion,
+                    'idmarcacion'       => $idMarcacion,
                 ])
                 ->exists();
 
@@ -123,20 +123,28 @@ class GrumascanconteomanualController extends Controller
                 return $this->render('create', ['model' => $model]); // no sale
             }
 
-            // 3) Calcular unidades sistema
-            $unidadesSistema = (int)$conteoReal->totalunidades;
+            // 3) Calcular "paquetes" sistema (NO unidades infladas por equivalencia)
+            //    Ej: si contaron 3 de paquete x2, aquí el sistema debe devolver 3 (no 6).
+            $unidadesSistema = (int)(new \yii\db\Query())
+                ->from(['d' => 'grumascanconteodetalle'])
+                ->where(['d.idgrumascanconteo' => (int)$conteoReal->id])
+                // Ignora cantidades null/0 (si quieres contar también ceros, quita esta línea)
+                ->andWhere(['>', new \yii\db\Expression("COALESCE(TRY_CONVERT(INT, d.cantidad), 0)"), 0])
+                ->select(new \yii\db\Expression("SUM(COALESCE(TRY_CONVERT(INT, d.cantidad), 0))"))
+                ->scalar();
+
             $diferencia = (int)$unidadesManual - (int)$unidadesSistema;
 
             // 4) Si hay diferencia, NO guardar
             if ($diferencia !== 0) {
                 Yii::$app->session->setFlash(
                     'error',
-                    "NO se guardó. Diferencia detectada. Manual: {$unidadesManual} | Sistema: {$unidadesSistema} | Diferencia: {$diferencia}. Validar y, si aplica, volver a contar."
+                    "NO se guardó. Diferencia detectada. Manual: {$unidadesManual} | Sistema (paquetes): {$unidadesSistema} | Diferencia: {$diferencia}. Validar y, si aplica, volver a contar."
                 );
 
                 // (Opcional) Mostrar valores calculados en el form sin guardar:
-                $model->unidades_sistema = $unidadesSistema;
-                $model->diferencia = $diferencia;
+                $model->unidades_sistema  = $unidadesSistema;
+                $model->diferencia        = $diferencia;
                 $model->idgrumascanconteo = (int)$conteoReal->id;
 
                 return $this->render('create', ['model' => $model]);
@@ -144,7 +152,7 @@ class GrumascanconteomanualController extends Controller
 
             // 5) Llenar campos que NO se piden en el form
             $model->idgrumascanconteo = (int)$conteoReal->id;
-            $model->unidades_sistema  = $unidadesSistema;
+            $model->unidades_sistema  = $unidadesSistema; // ahora es "paquetes"
             $model->diferencia        = 0;
 
             // 6) Guardar seguro
@@ -158,7 +166,7 @@ class GrumascanconteomanualController extends Controller
 
             Yii::$app->session->setFlash(
                 'success',
-                "Auditoría guardada OK. Manual: {$unidadesManual} = Sistema: {$unidadesSistema}."
+                "Auditoría guardada OK. Manual: {$unidadesManual} = Sistema (paquetes): {$unidadesSistema}."
             );
 
             // Quedarse en create y limpiar para siguiente registro
